@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>PENYIMPANAN BUKU</title>
+
+<style>
+body {
+  font-family: 'Segoe UI', sans-serif;
+  margin: 0;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #333;
+}
+
+header {
+  background: rgba(0,0,0,0.3);
+  backdrop-filter: blur(10px);
+  color: white;
+  padding: 15px;
+  text-align: center;
+  font-size: 20px;
+  letter-spacing: 1px;
+}
+
+.container {
+  width: 85%;
+  margin: auto;
+  margin-top: 20px;
+}
+
+.card {
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(12px);
+  padding: 15px;
+  margin-bottom: 15px;
+  border-radius: 15px;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+  color: white;
+}
+
+input {
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: white;
+}
+
+input::placeholder {
+  color: #ddd;
+}
+
+button {
+  background: linear-gradient(45deg, #00c6ff, #0072ff);
+  border: none;
+  color: white;
+  font-weight: bold;
+  transition: 0.3s;
+}
+
+button:hover {
+  transform: scale(1.05);
+}
+
+button[style*="red"] {
+  background: linear-gradient(45deg, #ff416c, #ff4b2b);
+  margin-bottom: 10px;
+}
+
+.book {
+  position: relative;
+  padding: 10px;
+  margin: 6px;
+  border-radius: 12px;
+  display: inline-block;
+  width: 120px;
+  height: 90px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: 0.3s;
+  background: rgba(255,255,255,0.2);
+}
+
+.book:hover {
+  transform: translateY(-5px) scale(1.05);
+}
+
+.folder {
+  background: linear-gradient(135deg, #43cea2, #185a9d);
+  text-align: center;
+  font-weight: bold;
+  color: white;
+}
+
+.folder::before {
+  content: "📂";
+  display: block;
+  font-size: 22px;
+}
+
+.book-title {
+  margin-top: 5px;
+  word-break: break-word;
+}
+
+.delete-btn {
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  background: red;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+}
+
+#backBtn {
+  background: linear-gradient(45deg, #f7971e, #ffd200);
+  margin-bottom: 10px;
+}
+
+.pw-container {
+  position: relative;
+}
+
+.eye-btn {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  cursor: pointer;
+}
+
+.error {
+  color: #ffb3b3;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h2>📚 PENYIMPANAN BUKU</h2>
+</header>
+
+<div class="container">
+
+<div class="card" id="loginBox">
+  <h3>Login</h3>
+
+  <div class="pw-container">
+    <input type="password" id="password" placeholder="Password">
+    <span class="eye-btn" onclick="togglePw()">👁️</span>
+  </div>
+
+  <div id="errorMsg" class="error"></div>
+  <button onclick="login()">Login</button>
+</div>
+
+<div id="app" style="display:none;">
+
+  <button onclick="logout()" style="background:red;">🚪 Keluar</button>
+
+  <div class="card">
+    <h3>Tambah Folder</h3>
+    <input type="text" id="folderName" placeholder="Nama Folder">
+    <button onclick="createFolder()">Buat Folder</button>
+  </div>
+
+  <div class="card">
+    <h3>Tambah File</h3>
+    <!-- 🔥 SUPPORT FOLDER -->
+    <input type="file" id="fileInput" webkitdirectory multiple>
+    <button onclick="saveFile()">Simpan</button>
+  </div>
+
+  <div class="card">
+    <h3 id="pathTitle">Daftar Folder</h3>
+    <button id="backBtn" onclick="goBack()" style="display:none;">⬅ Kembali</button>
+    <div id="folderList"></div>
+  </div>
+
+  <div class="card">
+    <h3>Ganti Password</h3>
+    <input type="password" id="oldPw" placeholder="Password Lama">
+    <input type="password" id="newPw" placeholder="Password Baru">
+    <button onclick="changePassword()">Ganti</button>
+  </div>
+
+</div>
+
+</div>
+
+<script>
+let currentFolder = null;
+
+/* 🔥 INDEXEDDB */
+let db;
+let request = indexedDB.open("fileDB", 1);
+
+request.onupgradeneeded = function(e) {
+  db = e.target.result;
+  db.createObjectStore("files", { keyPath: "id", autoIncrement: true });
+};
+
+request.onsuccess = function(e) {
+  db = e.target.result;
+};
+
+request.onerror = function() {
+  alert("Database error!");
+};
+
+if (!localStorage.getItem("password")) {
+  localStorage.setItem("password", "1234");
+}
+
+window.onload = function() {
+  if (sessionStorage.getItem("login") === "true") {
+    document.getElementById("loginBox").style.display = "none";
+    document.getElementById("app").style.display = "block";
+    loadView();
+  }
+};
+
+function getFolders() {
+  return JSON.parse(localStorage.getItem("folders") || "[]");
+}
+
+function saveFolders(data) {
+  localStorage.setItem("folders", JSON.stringify(data));
+}
+
+function createFolder() {
+  let name = document.getElementById("folderName").value;
+  if (!name) return alert("Isi nama folder!");
+
+  let folders = getFolders();
+  folders.push({ name: name, files: [] });
+
+  saveFolders(folders);
+  loadView();
+}
+
+function loadView() {
+  let list = document.getElementById("folderList");
+  let title = document.getElementById("pathTitle");
+  let backBtn = document.getElementById("backBtn");
+
+  list.innerHTML = "";
+  let folders = getFolders();
+
+  if (currentFolder === null) {
+    title.innerText = "Daftar Folder";
+    backBtn.style.display = "none";
+
+    folders.forEach((f, i) => {
+      let div = document.createElement("div");
+      div.className = "book folder";
+
+      div.innerHTML = `
+        <button class="delete-btn" onclick="deleteFolder(${i}); event.stopPropagation();">×</button>
+        ${f.name}
+      `;
+
+      div.onclick = () => {
+        currentFolder = i;
+        loadView();
+      };
+
+      list.appendChild(div);
+    });
+
+  } else {
+    title.innerText = folders[currentFolder].name;
+    backBtn.style.display = "block";
+
+    folders[currentFolder].files.forEach((file, index) => {
+      let div = document.createElement("div");
+      div.className = "book";
+
+      div.innerHTML = `
+        <button class="delete-btn" onclick="deleteFile(${index}); event.stopPropagation();">×</button>
+        <div class="book-title">${file.name.split('/').pop()}</div>
+      `;
+
+      div.onclick = () => {
+        let tx = db.transaction("files", "readonly");
+        let store = tx.objectStore("files");
+
+        let req = store.get(file.id);
+
+        req.onsuccess = function() {
+          let data = req.result.data;
+          let url = URL.createObjectURL(data);
+          window.open(url);
+        };
+      };
+
+      list.appendChild(div);
+    });
+  }
+}
+
+function deleteFolder(index) {
+  let yakin = confirm("Yakin mau hapus folder ini?");
+  if (yakin) {
+    let folders = getFolders();
+    folders.splice(index, 1);
+    saveFolders(folders);
+    currentFolder = null;
+    loadView();
+  }
+}
+
+function goBack() {
+  currentFolder = null;
+  loadView();
+}
+
+function saveFile() {
+  let folders = getFolders();
+
+  if (currentFolder === null) {
+    if (folders.length === 0) {
+      return alert("Buat folder dulu!");
+    }
+    currentFolder = 0;
+  }
+
+  let files = document.getElementById("fileInput").files;
+  if (files.length === 0) return alert("Pilih file!");
+
+  let tx = db.transaction("files", "readwrite");
+  let store = tx.objectStore("files");
+
+  let loaded = 0;
+
+  for (let i = 0; i < files.length; i++) {
+    let file = files[i];
+
+    let req = store.add({
+      name: file.name,
+      data: file
+    });
+
+    req.onsuccess = function(e) {
+      let fileId = e.target.result;
+
+      folders[currentFolder].files.push({
+        name: file.webkitRelativePath || file.name,
+        id: fileId
+      });
+
+      loaded++;
+
+      if (loaded === files.length) {
+        saveFolders(folders);
+        loadView();
+      }
+    };
+  }
+}
+
+function deleteFile(index) {
+  let folders = getFolders();
+  folders[currentFolder].files.splice(index, 1);
+  saveFolders(folders);
+  loadView();
+}
+
+function togglePw() {
+  let input = document.getElementById("password");
+  input.type = input.type === "password" ? "text" : "password";
+}
+
+function login() {
+  let pw = document.getElementById("password").value;
+  let savedPw = localStorage.getItem("password");
+
+  if (pw === savedPw) {
+    document.getElementById("loginBox").style.display = "none";
+    document.getElementById("app").style.display = "block";
+    document.getElementById("errorMsg").innerText = "";
+
+    sessionStorage.setItem("login", "true");
+    loadView();
+  } else {
+    document.getElementById("errorMsg").innerText = "Password salah!";
+  }
+}
+
+function logout() {
+  document.getElementById("app").style.display = "none";
+  document.getElementById("loginBox").style.display = "block";
+
+  document.getElementById("password").value = "";
+  document.getElementById("errorMsg").innerText = "";
+
+  currentFolder = null;
+  sessionStorage.removeItem("login");
+}
+
+function changePassword() {
+  let oldPw = document.getElementById("oldPw").value;
+  let newPw = document.getElementById("newPw").value;
+  let savedPw = localStorage.getItem("password");
+
+  if (oldPw === savedPw) {
+    localStorage.setItem("password", newPw);
+    alert("Password berhasil diganti!");
+  } else {
+    alert("Password lama salah!");
+  }
+}
+</script>
+
+</body>
+</html>
